@@ -1,0 +1,162 @@
+---
+title: "An Analysis of New York City Street Trees"
+author: "Sayre Bradley"
+date: "12/5/17"
+output: 
+  html_document:
+    fig_height: 4
+    fig_width: 6
+---
+<!-- Don't edit in between this line and the one below -->
+```{r include=FALSE}
+# Don't delete this chunk if you are using the DataComputing package
+library(DataComputing)
+library(knitr)
+```
+*Source file* 
+```{r, results='asis', echo=FALSE}
+includeSourceDocuments()
+```
+<!-- Don't edit the material above this line -->
+
+
+### Introduction
+
+As a casual fan of all things nature and a person who has spent very little time in large cities, I thought it would be interesting to do an analysis on the street trees of New York City.  The following analysis contains data from the [1995](https://data.cityofnewyork.us/Environment/1995-Street-Tree-Census/kyad-zm4j) and [2005](https://data.cityofnewyork.us/Environment/2005-Street-Tree-Census/29bw-z7pj) New York Street Tree censuses.  The data was collected by the NYC Department of Parks and Recreation. 
+
+```{r}
+Census1995 <- read.csv(file="1995_Street_Tree_Census.csv", header=TRUE, sep=",")
+Census2005 <- read.csv(file="2005_Street_Tree_Census.csv", header=TRUE, sep=",")
+```
+
+I spent the majority of my time working with the data from the 2005 census, as it contains a bit more information than the 1995 census.  My goals for this analysis were to determine the most popular types of trees in New York City, the most common tree in each borough, the impact of strangulation devices on street trees, and finally, to compare the data results from 1995 to the results from 2005.
+
+To get started, I cleaned up the data tables by narrowing down the variables I was interested in and giving them more descriptive names.  
+
+```{r}
+# SELECT VARIABLES AND RENAME
+Edit1995 <-
+  Census1995 %>%
+  select(Address, Condition, Spc_Common) %>%
+  rename(TreeType = Spc_Common)  %>%
+  # CREATE VARIABLE FOR YEAR
+  mutate(CensusYear = "1995")
+```
+```{r}
+Edit2005 <- 
+  Census2005 %>%
+  select(tree_dbh, address, tree_loc, status, inf_wires, spc_common, boroname, nta_name, borocode) %>%
+  rename(Diameter = tree_dbh, Address = address, Location = tree_loc, Condition = status, ChokingWires = inf_wires, TreeType = spc_common, Borough = boroname, Neighborhood = nta_name, BoroughCode = borocode) %>%
+  mutate(CensusYear = "2005")
+```
+
+### Popular Trees
+
+The first thing I wanted to determine with the data from the 2005 census was which types of trees were the most common on New York streets.  To accomplish this, I simply grouped the data by tree type and counted how many times each tree appeared. 
+
+```{r}
+PopularTrees<-
+  Edit2005 %>%
+  group_by(TreeType) %>%
+  summarise(Count = n()) %>%
+  arrange(desc(Count))
+# PUT DATA INTO TABLE AND SHOW TOP 10
+kable(head(PopularTrees, 10))
+```
+
+From the table above, I could see that the most common tree appearing on NYC streets in 2005 was the London Planetree.  Another interesting fact that I learned from this table is that there are significant amount of trees with species types that were unknown to the individuals collecting the data. 
+
+### Maple Trees
+
+My original idea for this section of my analysis was to discover what the most popular type of tree was in each borough in 2005.  However, as I was looking through the dataset, I quickly realized that there were a lot more species of trees growing in New York City than I imagined.  I decided that all of those species would make for a very over-crowded and unappealing graphic.  To limit the number of types of trees, I decided to continue with my original idea using only maple trees.
+
+To start, I created a new table, Maples, and grouped the data from the 2005 census by species and borough.  Then I filtered to show only species of maple tree.
+```{r}
+Maples <-
+  Edit2005 %>%
+  group_by(TreeType, Borough) %>%
+  summarise(Count = n()) %>%
+  # FILTER OUT RESULTS THAT DO NOT CONTAIN "MAPLE"
+  filter(grepl("MAPLE", TreeType))
+```
+
+I made my graph using the information from the table that was created above.
+```{r}
+Maples %>%
+ggplot(aes(x=Borough,y=Count ,fill=TreeType))+
+  geom_bar(stat='identity', position='stack', width=.9) +
+  scale_fill_discrete("MapleType")
+```
+
+I first want to clarify that borough "5" is actually Staten Island.  For some reason, the value didn't transfer over from the original data as it did with the other four boroughs.  There were several interesting facts to be learned from the graph that is pictured above. One of these is that out of all the NYC boroughs, Manhattan has the least amount of maple trees on its streets.  Queens has the most maple trees.  The most common type of maple was the same for each borough, and it was the Norway Maple.    
+
+### Tree Condition Based on Choking Wire
+
+One of the variables in 2005 census, ChokingWires, told whether or not a tree had some sort of wire or rope wrapped around it.  I had no idea when anyone would tie a wire around a tree, so I actually had to Google it.  In many cases, the wire is left around the tree from the time it was staked.  People will also use wires and rope for purposes like hanging clotheslines, hammocks, and such.
+
+I would assume that over time, wires or ropes start to strangle trees and become harmful.  To see if I was correct, I compared the conditions of trees with choking wires to those without wires.
+
+```{r}
+StrangledTrees <-
+  Edit2005 %>%
+  group_by(ChokingWires, Condition) %>%
+  summarise(Count = n())
+```
+```{r}
+StrangledTrees %>%
+ggplot(aes(x=reorder(Condition,Count),y=Count )) +
+  geom_bar(stat='identity', position='stack', width=.9) + 
+  facet_wrap(~ChokingWires,ncol=3) +
+  xlab("Condition")
+```
+
+I was surprised by these results.  I was expecting more trees with choking wires to be in poor condition, when really they follow the same pattern as the trees without choking wires. From the graph, there appears to be no significant difference in the condition of trees with choking wire and trees without choking wire. 
+
+### Comparing 1995 and 2005
+
+To end my analysis, I wanted to explore the 1995 street tree census.  I thought it would be interesting to choose a street, and compare the results of the 1995 data to the results of the 2005 data.  The street I chose was Beaumont Street.
+
+```{r warning=FALSE}
+CombineYears <-
+  Edit2005 %>%
+  # JOIN TABLES TOGETHER
+  full_join(Edit1995) %>%
+  group_by(Address, TreeType, CensusYear, Condition) %>%
+  summarize(Count = n()) %>%
+  # FILTER TO SHOW ONLY BEAUMONT
+  filter(grepl("BEAUMONT", Address)) %>%
+  # REMOVE AVENUE TO LEAVE ONLY STREET
+  filter(! grepl("AVENUE|AV", Address))
+```
+
+```{r}
+CombineYears %>%
+ggplot(aes(x=CensusYear,y=Count )) +
+  geom_bar(stat="identity", position='stack', width=.9) 
+```
+
+From the graph above, it was obvious that in 2005, there were more trees on Beaumont Street.
+
+Next, I compared the condition of the trees on Beaumont Street from 1995 to those in 2005.
+
+```{r}
+CombineYears %>%
+ggplot(aes(x=Condition, y=Count, fill=CensusYear)) +
+  geom_bar(stat='identity',position='stack', width=.9) 
+```
+
+In 2005, there were no dead trees on Beaumont Street.  Although there were a small number of dead trees in 1995, the majority of the trees on this street were in excellent condition.  This trend continued on in 2005, as the majority in this year were also in excellent condition.  
+
+### Conclusion 
+
+I was able to learn many interesting facts from the street tree census data, some of which surprised me, such as the impact (or lack thereof) of choking wires on tree condition.  I also realized some of the limitations that come with working with data that consists of mostly categorical variables, which is something I did not anticipate when I chose this topic.  Despite the lack of quantitative data, I was still able to perform an interesting analysis on the street trees of New York City.
+
+
+
+
+  
+  
+
+
+
+
