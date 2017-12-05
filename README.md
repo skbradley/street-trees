@@ -8,4 +8,4 @@ This repository contains my final project for STAT 184 at Penn State University.
 [2005 Census](https://data.cityofnewyork.us/Environment/2005-Street-Tree-Census/29bw-z7pj)
 
 
-To view my analysis, please click [here.](https://data.cityofnewyork.us/Environment/2005-Street-Tree-Census/29bw-z7pj)
+To view my analysis, please click [here.](https://skbradley.github.io/street-trees/streettrees.html)
